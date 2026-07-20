@@ -1,10 +1,10 @@
-from bs4 import BeautifulSoup
 import os
+import time
+from bs4 import BeautifulSoup
 import requests
 
-USERNAME = "vaxuux"  # Replace with your Donut SMP username
-WEBHOOK_URL = "https://discord.com/api/webhooks/1528581249474498590/3VGIVESBGyQOx_Xi3kP1gd8csl7WekC0tdDiEViFLr__nhZOLmutiHcSkWMUic7c1Czu"
-# Fetched safely from GitHub Secrets
+USERNAME = "vaxuux"  # Your Donut SMP username
+WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
 
 
 def fetch_balance(username):
@@ -62,67 +62,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    return precise.text.strip()
-
-
-def send_to_discord(username, balance):
-    if not WEBHOOK_URL:
-        print("[!] Missing Discord Webhook URL secret.")
-        return
-    payload = {
-        "content": f"💰 **{username}**'s Donut SMP balance: **{balance}**"
-    }
-    res = requests.post(WEBHOOK_URL, json=payload)
-    if res.status_code in (200, 204):
-        print("[+] Sent successfully to Discord.")
-    else:
-        print(f"[!] Discord Error: {res.status_code}")
-
-
-def main():
-    try:
-        balance = fetch_balance(USERNAME)
-        print(f"[+] Balance for {USERNAME}: {balance}")
-        send_to_discord(USERNAME, balance)
-    except Exception as e:
-        print(f"[!] Error: {e}")
-
-
-if __name__ == "__main__":
-    main()
-        card = card.parent
-
-    # Extract the balance string
-    precise = card.find("p", class_=lambda c: c and "font-mono" in c)
-    if not precise:
-        raise Exception("Balance element not found")
-
-    return precise.text.strip()
-
-
-def send_to_discord(username, balance):
-    payload = {
-        "content": f"💰 **{username}**'s Donut SMP balance: **{balance}**"
-    }
-    res = requests.post(WEBHOOK_URL, json=payload)
-    if res.status_code not in (200, 204):
-        print(f"[!] Discord Error: {res.status_code}")
-
-
-def main():
-    print(f"[*] Starting 24/7 Donut SMP Watcher for {USERNAME}...")
-    while True:
-        try:
-            balance = fetch_balance(USERNAME)
-            print(f"[+] Balance: {balance}")
-            send_to_discord(USERNAME, balance)
-        except Exception as e:
-            print(f"[!] Error: {e}")
-
-        time.sleep(CHECK_INTERVAL)
-
-
-if __name__ == "__main__":
-    main()
-  
