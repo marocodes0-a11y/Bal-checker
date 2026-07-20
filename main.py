@@ -4,7 +4,7 @@ import requests
 
 USERNAME = "vaxuux"  # Replace with your Donut SMP username
 WEBHOOK_URL = os.environ.get(
-    "https://discord.com/api/webhooks/1528581249474498590/3VGIVESBGyQOx_Xi3kP1gd8csl7WekC0tdDiEViFLr__nhZOLmutiHcSkWMUic7c1Czu"
+    "DISCORD_WEBHOOK"
 )  # Fetched safely from GitHub Secrets
 
 
@@ -34,6 +34,35 @@ def fetch_balance(username):
     precise = card.find("p", class_=lambda c: c and "font-mono" in c)
     if not precise:
         raise Exception("Balance element not found")
+
+    return precise.text.strip()
+
+
+def send_to_discord(username, balance):
+    if not WEBHOOK_URL:
+        print("[!] Missing Discord Webhook URL secret.")
+        return
+    payload = {
+        "content": f"💰 **{username}**'s Donut SMP balance: **{balance}**"
+    }
+    res = requests.post(WEBHOOK_URL, json=payload)
+    if res.status_code in (200, 204):
+        print("[+] Sent successfully to Discord.")
+    else:
+        print(f"[!] Discord Error: {res.status_code}")
+
+
+def main():
+    try:
+        balance = fetch_balance(USERNAME)
+        print(f"[+] Balance for {USERNAME}: {balance}")
+        send_to_discord(USERNAME, balance)
+    except Exception as e:
+        print(f"[!] Error: {e}")
+
+
+if __name__ == "__main__":
+    main()
 
     return precise.text.strip()
 
