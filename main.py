@@ -1,63 +1,114 @@
-import os
+"""
+Donut SMP -> Discord balance poster
+------------------------------------
+Fetches your balance from donutsearch.xyz and posts it to a Discord
+webhook every INTERVAL_SECONDS.
+
+SETUP:
+  1. pip install requests beautifulsoup4 playwright
+     playwright install chromium      (only needed if the fast method fails)
+  2. Fill in USERNAME and WEBHOOK_URL below.
+  3. Run:  python donut_balance_bot.py
+     Leave the terminal window open (or run it on a server/VPS to keep
+     it running 24/7).
+"""
+
+import re
 import time
-from bs4 import BeautifulSoup
 import requests
+from bs4 import BeautifulSoup
 
-USERNAME = "vaxuux"  # Your Donut SMP username
-WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
-
-
-def fetch_balance(username):
-    url = f"https://donutsearch.xyz/player/{username}"
-    proxy_url = f"https://api.allorigins.win/raw?url={url}"
-
-    response = requests.get(proxy_url, headers={"User-Agent": "Mozilla/5.0"})
-    if response.status_code != 200:
-        raise Exception(f"Failed to fetch profile: {response.status_code}")
-
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    money_label = None
-    for el in soup.find_all(text=True):
-        if el.strip() == "Money":
-            money_label = el.parent
-            break
-
-    if not money_label:
-        raise Exception("Money field not found")
-
-    card = money_label
-    while card and "rounded-2xl" not in card.get("class", []):
-        card = card.parent
-
-    precise = card.find("p", class_=lambda c: c and "font-mono" in c)
-    if not precise:
-        raise Exception("Balance element not found")
-
-    return precise.text.strip()
+# ---------------- CONFIG ----------------
+USERNAME = "namehere"          # <-- your Minecraft username
+WEBHOOK_URL = "https://discord.com/api/webhooks/XXXX/XXXX"  # <-- your webhook
+INTERVAL_SECONDS = 20
+PROFILE_URL = f"https://donutsearch.xyz/player/{USERNAME}"
+MENTION_ID = "1121808241974837308"  # <-- tagged when balance hasn't changed
+# -----------------------------------------
 
 
-def send_to_discord(username, balance):
-    if not WEBHOOK_URL:
-        print("[!] Missing Discord Webhook URL secret.")
-        return
+def _extract_from_soup(soup):
+    """Find the stat card labeled exactly 'Money' and return its precise
+    (font-mono) figure, e.g. '$315,172,963'."""
+    for label in soup.find_all(string=lambda s: s and s.strip() == "Money"):
+        card = label.find_parent(
+            "div", class_=re.compile(r"rounded-2xl")
+        )
+        if card is None:
+            continue
+        precise = card.find("p", class_=re.compile(r"font-mono"))
+        if precise and precise.get_text(strip=True):
+            return precise.get_text(strip=True)
+    return None
+
+
+def get_balance_fast():
+    """Try to grab the balance straight from the raw HTML (no JS)."""
+    resp = requests.get(
+        PROFILE_URL,
+        headers={"User-Agent": "Mozilla/5.0 (balance-bot)"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    return _extract_from_soup(soup)
+
+
+def get_balance_rendered():
+    """Slower fallback: render the page with a real (headless) browser."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(PROFILE_URL, wait_until="networkidle")
+        html = page.content()
+        browser.close()
+
+    soup = BeautifulSoup(html, "html.parser")
+    return _extract_from_soup(soup)
+
+
+def get_balance():
+    try:
+        balance = get_balance_fast()
+        if balance:
+            return balance
+    except Exception as e:
+        print(f"[fast method failed] {e}")
+
+    print("Falling back to rendered (Playwright) fetch...")
+    try:
+        return get_balance_rendered()
+    except Exception as e:
+        print(f"[rendered method failed] {e}")
+        return None
+
+
+def send_to_discord(balance: str, unchanged: bool):
+    mention = f" <@{MENTION_ID}>" if unchanged else ""
+    note = " (unchanged since last check)" if unchanged else ""
     payload = {
-        "content": f"💰 **{username}**'s Donut SMP balance: **{balance}**"
+        "content": f"💰 **{USERNAME}**'s Donut SMP balance: **{balance}**{note}{mention}"
     }
-    res = requests.post(WEBHOOK_URL, json=payload)
-    if res.status_code in (200, 204):
-        print("[+] Sent successfully to Discord.")
-    else:
-        print(f"[!] Discord Error: {res.status_code}")
+    r = requests.post(WEBHOOK_URL, json=payload, timeout=10)
+    if r.status_code >= 300:
+        print(f"[discord error] {r.status_code}: {r.text}")
 
 
 def main():
-    try:
-        balance = fetch_balance(USERNAME)
-        print(f"[+] Balance for {USERNAME}: {balance}")
-        send_to_discord(USERNAME, balance)
-    except Exception as e:
-        print(f"[!] Error: {e}")
+    print(f"Watching balance for '{USERNAME}', posting every {INTERVAL_SECONDS}s...")
+    last_balance = None
+    while True:
+        balance = get_balance()
+        if balance:
+            unchanged = balance == last_balance
+            print(f"Balance found: {balance}" + (" (unchanged)" if unchanged else ""))
+            send_to_discord(balance, unchanged)
+            last_balance = balance
+        else:
+            print("Could not find balance on the page this round.")
+        time.sleep(INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":
