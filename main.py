@@ -3,9 +3,8 @@ import os
 import requests
 
 USERNAME = "vaxuux"  # Replace with your Donut SMP username
-WEBHOOK_URL = os.environ.get(
-    "DISCORD_WEBHOOK"
-)  # Fetched safely from GitHub Secrets
+WEBHOOK_URL = "https://discord.com/api/webhooks/1528581249474498590/3VGIVESBGyQOx_Xi3kP1gd8csl7WekC0tdDiEViFLr__nhZOLmutiHcSkWMUic7c1Czu"
+# Fetched safely from GitHub Secrets
 
 
 def fetch_balance(username):
